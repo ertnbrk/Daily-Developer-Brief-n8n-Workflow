@@ -6,6 +6,11 @@ The system is designed to eliminate noise (finance, crypto, irrelevant trends) a
 
 ---
 
+<img width="1162" height="494" alt="workflow" src="https://github.com/user-attachments/assets/d583e94e-b27e-4bd1-b192-4e12f866c505" />
+
+
+---
+
 ## ✨ What This Project Does
 
 - Aggregates developer-relevant content from:
