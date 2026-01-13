@@ -39,27 +39,6 @@ This project also serves as a **DevOps / Automation portfolio showcase**, demons
 
 ---
 
-## 🏗️ Architecture Overview
-
-Sources
-├─ Google News (via Apify)
-└─ Reddit (via Apify)
-↓
-Keyword Ingestion
-↓
-Noise Filtering
-↓
-Deduplication (Hashing)
-↓
-Scoring & Ranking (SQL)
-↓
-Top Content Selection
-↓
-├─ Notion Archive
-└─ HTML Email Digest
-
----
-
 ## ⚙️ Workflow Highlights
 
 ### Content Filtering
@@ -122,21 +101,3 @@ Top Content Selection
 - Security & release tracking
 - Personal knowledge curation
 - Automation & workflow portfolio project
-
----
-
-## 📌 Future Improvements
-
-- AI-generated “Why it matters” summaries
-- Image proxying for email-safe visuals
-- Personal relevance scoring
-- Slack / Discord delivery
-- Multi-user support
-
----
-
-## 📄 License
-
-MIT License
-
----
