@@ -1,0 +1,611 @@
+{
+  "name": "daily-developer-brief",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        -768,
+        -192
+      ],
+      "id": "fad24cb8-5149-490d-9697-604c875c2258",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "url": "=https://api.apify.com/v2/datasets/{{ $json.data.defaultDatasetId }}/items?clean=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        304,
+        -256
+      ],
+      "id": "a2d49eb8-319b-40a8-bfb4-6e94c72ec52b",
+      "name": "GetData"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"apify\": {\n    \"token\": \"APIFY_API_TOKEN_BURAYA\",\n\n    \"actors\": {\n      \"googleNews\": \"automatelab/google-news-scraper\",\n      \"reddit\": \"apify~reddit-scraper\"\n    }\n  },\n\n  \"googleNews\": {\n    \"keywords\": [\n      \"software OR developer OR programming\",\n      \"cloud OR devops OR kubernetes OR docker\",\n      \"open source OR framework release\",\n      \"security vulnerability OR patch\"\n    ],\n    \"maxArticles\": 30,\n    \"timeframe\": \"1d\",\n    \"region\": \"US:en\"\n  },\n\n  \"reddit\": {\n    \"subreddits\": [\n      \"programming\",\n      \"devops\",\n      \"docker\",\n      \"kubernetes\",\n      \"webdev\",\n      \"javascript\",\n      \"python\"\n    ],\n    \"maxItems\": 40\n  },\n\n  \"notion\": {\n    \"databaseId\": \"NOTION_DATABASE_ID\"\n  },\n\n  \"email\": {\n    \"to\": \"youremail@gmail.com\"\n  }\n}\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -560,
+        -192
+      ],
+      "id": "f52a2129-cfb0-49e8-92c6-eae2eff2c1ef",
+      "name": "GlobalConfig1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const subs = $input.first().json.reddit.subreddits;\nconst modes = [\"hot\", \"top\"];\n\nreturn subs.flatMap(sub =>\n  modes.map(mode => ({\n    json: {\n      url: `https://www.reddit.com/r/${sub}/${mode}/?t=day`\n    }\n  }))\n);\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        -80
+      ],
+      "id": "7064753f-e2f6-46ce-8518-5b0af8193536",
+      "name": "Build Reddit Start URLs"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{ $('GlobalConfig').first().json.apify.actors.reddit }}/runs?token={{ $('GlobalConfig').first().json.apify.token }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        48,
+        -80
+      ],
+      "id": "bf2de03e-79cb-4666-b792-c65fe31e9e0e",
+      "name": "Run Reddit Scraper",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "url": "=https://api.apify.com/v2/datasets/{{ $json.data.defaultDatasetId }}/items?clean=true",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        352,
+        -80
+      ],
+      "id": "e363b82d-a5b1-4234-9ea5-2e278e62931a",
+      "name": "Fetch Reddit Dataset"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        528,
+        -128
+      ],
+      "id": "038ce05d-2e21-4609-9f88-b8921b3e9ac7",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "type": "SHA256",
+        "value": "={{$json.url}}",
+        "dataPropertyName": "hash"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        128
+      ],
+      "id": "e8640043-31ca-4f41-87d3-d6660ea49366",
+      "name": "Generate Hash"
+    },
+    {
+      "parameters": {
+        "jsCode": "const hashes = items.map(i => i.json.hash);\n\nreturn [\n  {\n    json: {\n      allHashes: hashes\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        272
+      ],
+      "id": "ea8340d8-bcc5-40f5-a476-97dbf1d9b967",
+      "name": "Collect All Hashes"
+    },
+    {
+      "parameters": {
+        "jsCode": "const existingHashes = new Set();\n\nfor (const item of items) {\n  const props = item.json.properties;\n  if (props?.Hash?.rich_text?.[0]?.plain_text) {\n    existingHashes.add(\n      props.Hash.rich_text[0].plain_text\n    );\n  }\n}\n\nreturn [\n  {\n    json: {\n      existingHashes: Array.from(existingHashes)\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        272
+      ],
+      "id": "3d4004bc-607a-4fa5-aef9-ce0584bb9f7a",
+      "name": "Build Existing Hash Set"
+    },
+    {
+      "parameters": {
+        "resource": "database",
+        "databaseId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "databaseId",
+          "__regex": "^([0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12})"
+        }
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        -192,
+        272
+      ],
+      "id": "8102dfa4-660a-4d81-b0ef-7c9651b6d239",
+      "name": "Fetch Existing Notion Items",
+      "credentials": {
+        "notionApi": {
+          "id": "DATABASEID",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "={{ $('GlobalConfig').first().json.notion.databaseId }}",
+          "mode": "id"
+        },
+        "title": "={{ $json.title }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Title|title",
+              "title": "={{ $json.title }}"
+            },
+            {
+              "key": "URL|url",
+              "ignoreIfEmpty": true,
+              "urlValue": "={{ $json.url }}"
+            },
+            {
+              "key": "Source|select",
+              "selectValue": "={{ $json.source }}"
+            },
+            {
+              "key": "PublishedAt|date",
+              "date": "={{ $json.publishedAt }}"
+            },
+            {
+              "key": "Summary|rich_text",
+              "textContent": "={{ $json.description }}"
+            },
+            {
+              "key": "Score|number",
+              "numberValue": "={{ $json.score }}"
+            },
+            {
+              "key": "Hash|rich_text",
+              "textContent": "={{ $json.hash }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        448,
+        80
+      ],
+      "id": "a16fde78-3717-4c6c-b981-980fdd6ce50f",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "DATABASEID",
+          "name": "Notion account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "combineBySql",
+        "query": "SELECT\n  input1.*,\n\n  -- base score calculation\n  CASE\n    WHEN input1.source LIKE 'Reddit%' THEN COALESCE(input1.score, 0)\n    ELSE 30\n  END AS base_score\n\nFROM\n  input1\n\nLEFT JOIN\n  input2\nON\n  input1.hash = input2.hash\n\nWHERE\n  input2.hash IS NULL\n\n\n  -- Reddit: minimum signal\n  AND (\n    input1.source NOT LIKE 'Reddit%'\n    OR COALESCE(input1.score, 0) >= 50\n  )\n\n  -- Google News noise filter\n  AND NOT (\n    LOWER(input1.title) LIKE '%job%'\n    OR LOWER(input1.title) LIKE '%hiring%'\n    OR LOWER(input1.title) LIKE '%career%'\n    OR LOWER(input1.title) LIKE '%salary%'\n    OR LOWER(input1.title) LIKE '%course%'\n    OR LOWER(input1.title) LIKE '%tutorial%'\n  )\n\nORDER BY\n  base_score DESC,\n  input1.publishedAt DESC\n\nLIMIT 8;\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        176,
+        144
+      ],
+      "id": "87b0d1d8-16e8-4e71-b760-0d876e2f1ac0",
+      "name": "SQL JOIN"
+    },
+    {
+      "parameters": {
+        "jsCode": "// =======================================\n// DAILY DEVELOPER BRIEF – MAIL HTML (NO IMG)\n// =======================================\n\n// items = SQL'den gelen TOP içerikler (max 8)\n\nconst today = new Date();\nconst dateStr = today.toLocaleDateString(\"tr-TR\", {\n  year: \"numeric\",\n  month: \"long\",\n  day: \"numeric\",\n});\n\n// Notion arşiv linki (opsiyonel)\nconst notionLink = $json?.notion?.pageUrl || \"\";\n\n// ---------------- Utilities ----------------\n\nfunction escapeHtml(str = \"\") {\n  return String(str)\n    .replaceAll(\"&\", \"&amp;\")\n    .replaceAll(\"<\", \"&lt;\")\n    .replaceAll(\">\", \"&gt;\")\n    .replaceAll('\"', \"&quot;\")\n    .replaceAll(\"'\", \"&#039;\");\n}\n\nfunction formatSource(source = \"\") {\n  if (source.startsWith(\"Reddit\")) return \"Reddit\";\n  return \"News\";\n}\n\nfunction badgeHtml(source, score) {\n  const type = formatSource(source);\n  if (type === \"Reddit\") {\n    return `<span class=\"badge badge-reddit\">Reddit • ↑ ${score ?? 0}</span>`;\n  }\n  return `<span class=\"badge badge-news\">News</span>`;\n}\n\nfunction timeHtml(iso) {\n  if (!iso) return \"\";\n  const d = new Date(iso);\n  if (Number.isNaN(d.getTime())) return \"\";\n  return d.toLocaleString(\"tr-TR\", {\n    month: \"short\",\n    day: \"2-digit\",\n    hour: \"2-digit\",\n    minute: \"2-digit\",\n  });\n}\n\n// ---------------- Categorization ----------------\n\nconst breakingKeywords = [\n  \"cve\",\n  \"vulnerability\",\n  \"security\",\n  \"breach\",\n  \"zero-day\",\n  \"zeroday\",\n  \"rce\",\n  \"patch\",\n];\n\nconst releaseKeywords = [\n  \"release\",\n  \"released\",\n  \"launch\",\n  \"announced\",\n  \"version\",\n  \"beta\",\n  \"rc\",\n];\n\nconst breaking = [];\nconst discussions = [];\nconst releases = [];\n\nfor (const it of items) {\n  const j = it.json || {};\n  const title = (j.title || \"\").toLowerCase();\n  const srcType = formatSource(j.source || \"\");\n\n  const isBreaking = breakingKeywords.some(k => title.includes(k));\n  const isRelease = releaseKeywords.some(k => title.includes(k));\n\n  if (isBreaking) breaking.push(it);\n  else if (srcType === \"Reddit\") discussions.push(it);\n  else if (isRelease) releases.push(it);\n  else releases.push(it);\n}\n\nconst sections = [\n  { title: \"🚨 Önemli Gelişmeler\", arr: breaking },\n  { title: \"💬 Developer Gündemi\", arr: discussions },\n  { title: \"🛠️ Release & Güncellemeler\", arr: releases },\n].filter(s => s.arr.length > 0);\n\n// ---------------- Card HTML ----------------\n\nfunction cardsHtml(arr) {\n  return arr\n    .map(it => {\n      const j = it.json || {};\n\n      const title = escapeHtml(j.title || \"Untitled\");\n      const url = escapeHtml(j.url || \"#\");\n\n      const descRaw = (j.description || \"\").trim();\n      const desc = escapeHtml(\n        descRaw.length > 160 ? descRaw.slice(0, 157) + \"...\" : descRaw\n      );\n\n      const source = escapeHtml(j.source || \"\");\n      const publishedAt = timeHtml(j.publishedAt);\n      const score = j.score ?? null;\n\n      return `\n        <div class=\"card\">\n          <div class=\"card-top\">\n            ${badgeHtml(j.source || \"\", score)}\n            <span class=\"meta\">\n              ${publishedAt ? publishedAt + \" • \" : \"\"}${source}\n            </span>\n          </div>\n\n          <a class=\"title\" href=\"${url}\" target=\"_blank\" rel=\"noopener noreferrer\">\n            ${title}\n          </a>\n\n          ${desc ? `<div class=\"desc\">${desc}</div>` : \"\"}\n\n          <div class=\"actions\">\n            <a class=\"btn\" href=\"${url}\" target=\"_blank\" rel=\"noopener noreferrer\">\n              Oku\n            </a>\n          </div>\n        </div>\n      `;\n    })\n    .join(\"\");\n}\n\n// ---------------- Final HTML ----------------\n\nconst html = `\n<!doctype html>\n<html>\n<head>\n  <meta charset=\"utf-8\">\n  <meta name=\"viewport\" content=\"width=device-width\">\n  <title>Daily Developer Brief</title>\n\n  <style>\n    body {\n      margin:0;\n      padding:0;\n      background:#f6f7fb;\n      font-family:-apple-system,BlinkMacSystemFont,\"Segoe UI\",Roboto,Arial,sans-serif;\n      color:#111827;\n    }\n\n    .wrap {\n      max-width:720px;\n      margin:0 auto;\n      padding:20px;\n    }\n\n    .header {\n      background:#0b1220;\n      color:#fff;\n      border-radius:14px;\n      padding:18px;\n    }\n\n    .brand {\n      font-size:14px;\n      letter-spacing:.08em;\n      text-transform:uppercase;\n      opacity:.8;\n    }\n\n    .h1 {\n      margin:6px 0 0;\n      font-size:22px;\n      line-height:1.2;\n    }\n\n    .sub {\n      margin-top:8px;\n      font-size:13px;\n      opacity:.85;\n    }\n\n    .pillrow {\n      margin-top:12px;\n      display:flex;\n      gap:8px;\n      flex-wrap:wrap;\n    }\n\n    .pill {\n      background:rgba(255,255,255,.1);\n      padding:6px 10px;\n      border-radius:999px;\n      font-size:12px;\n    }\n\n    .section {\n      margin-top:18px;\n    }\n\n    .section h2 {\n      font-size:14px;\n      margin:12px 0;\n    }\n\n    .grid {\n      display:grid;\n      grid-template-columns:1fr;\n      gap:12px;\n    }\n\n    .card {\n      background:#fff;\n      border-radius:14px;\n      border:1px solid #eef0f6;\n      box-shadow:0 1px 2px rgba(16,24,40,.04);\n      padding:14px;\n    }\n\n    .card-top {\n      display:flex;\n      justify-content:space-between;\n      align-items:center;\n      margin-bottom:8px;\n      gap:8px;\n    }\n\n    .badge {\n      font-size:12px;\n      padding:5px 9px;\n      border-radius:999px;\n      font-weight:600;\n    }\n\n    .badge-news {\n      background:#eef2ff;\n      color:#3730a3;\n    }\n\n    .badge-reddit {\n      background:#fff7ed;\n      color:#9a3412;\n    }\n\n    .meta {\n      font-size:12px;\n      color:#6b7280;\n      text-align:right;\n      flex:1;\n    }\n\n    .title {\n      display:block;\n      font-size:15px;\n      line-height:1.35;\n      font-weight:700;\n      color:#111827;\n      text-decoration:none;\n    }\n\n    .desc {\n      margin-top:8px;\n      font-size:13px;\n      line-height:1.5;\n      color:#374151;\n    }\n\n    .actions {\n      margin-top:12px;\n    }\n\n    .btn {\n      background:#111827;\n      color:#fff !important;\n      text-decoration:none;\n      font-size:12px;\n      padding:8px 10px;\n      border-radius:10px;\n    }\n\n    .footer {\n      margin-top:18px;\n      font-size:12px;\n      color:#6b7280;\n      text-align:center;\n    }\n\n    @media (min-width:640px) {\n      .grid {\n        grid-template-columns:1fr 1fr;\n      }\n    }\n  </style>\n</head>\n\n<body>\n  <div class=\"wrap\">\n    <div class=\"header\">\n      <div class=\"brand\">Daily Developer Brief</div>\n      <div class=\"h1\">${escapeHtml(dateStr)} • 8–10 dk okuma</div>\n      <div class=\"sub\">Günün yazılım ve teknoloji gündemi.</div>\n      <div class=\"pillrow\">\n        <span class=\"pill\">Google News + Reddit</span>\n        <span class=\"pill\">${items.length} içerik</span>\n        ${\n          notionLink\n            ? `<span class=\"pill\"><a href=\"${escapeHtml(\n                notionLink\n              )}\" target=\"_blank\" style=\"color:#fff;text-decoration:underline;\">Notion Arşiv</a></span>`\n            : \"\"\n        }\n      </div>\n    </div>\n\n    ${sections\n      .map(\n        sec => `\n      <div class=\"section\">\n        <h2>${sec.title}</h2>\n        <div class=\"grid\">\n          ${cardsHtml(sec.arr)}\n        </div>\n      </div>\n    `\n      )\n      .join(\"\")}\n\n    <div class=\"footer\">\n      Otomatik üretilmiştir • Daily Developer Brief\n    </div>\n  </div>\n</body>\n</html>\n`;\n\n// ---------------- Output ----------------\n\nreturn [\n  {\n    json: {\n      subject: `Daily Developer Brief — ${today.toISOString().slice(0, 10)}`,\n      html,\n    },\n  },\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        240
+      ],
+      "id": "cf124b4e-f1e5-4c5b-9a40-3f32ad2d94bd",
+      "name": "Build Email HTML"
+    },
+    {
+      "parameters": {
+        "toEmail": "=",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        656,
+        240
+      ],
+      "id": "0c4f0700-e8d4-43b3-a359-f9ac2e99f4fa",
+      "name": "Send email",
+      "webhookId": "1682bd9e-3bcf-4f82-9bd4-6ccf2abe99ff",
+      "credentials": {
+        "smtp": {
+          "id": "SMTP",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const maxItems =\n$('GlobalConfig').first().json.reddit.maxItems|| 40;\n\nconst startUrls = items.map(item => ({\n  url: item.json.url\n}));\n\nreturn [\n  {\n    json: {\n      startUrls,\n      maxItems,\n      maxComments: 0,\n      sort: \"hot\",\n      time: \"day\",\n      proxy: {\n        useApifyProxy: true\n      }\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        -80
+      ],
+      "id": "b3aa811d-96eb-4dc5-b420-c911c53621ab",
+      "name": "Prepare Actor Input"
+    },
+    {
+      "parameters": {
+        "jsCode": "const cfg = $input.first().json.googleNews;\n\nreturn [\n  {\n    json: {\n      keywords: cfg.keywords,\n      maxArticles: cfg.maxArticles,\n      timeframe: cfg.timeframe,\n      region_language: cfg.region,\n      decodeUrls: true,\n      extractDescriptions: true,\n      proxyConfiguration: {\n        useApifyProxy: true\n      }\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        -256
+      ],
+      "id": "6771c99d-7450-4ecf-a768-9a82376c29bf",
+      "name": "Prepare Google News Input"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        -256
+      ],
+      "id": "f7433795-aa38-4536-8bf3-929fdf0f2fa5",
+      "name": "Wait",
+      "webhookId": "8d2ecbeb-8bc2-4d52-b060-7907992deb65"
+    },
+    {
+      "parameters": {
+        "amount": 3,
+        "unit": "minutes"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "16e48132-3377-44f8-a76b-b0f2926e7beb",
+      "name": "Wait1",
+      "webhookId": "8d2ecbeb-8bc2-4d52-b060-7907992deb65"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.apify.com/v2/acts/{{ $('GlobalConfig').item.json.apify.actors.googleNews }}/runs?token={{ $('GlobalConfig').item.json.apify.token }}",
+        "sendBody": true,
+        "specifyBody": "={\n  keywords: {{ $json.keywords }},\n  maxArticles:{{ $json.maxArticles }},\n  timeframe: {{ $json.timeframe }},\n  region_language: {{ $json.region_language }},\n  decodeUrls: true,\n  extractDescriptions: true,\n  proxyConfiguration: {\n    useApifyProxy: true\n  }\n}\n",
+        "bodyParameters": {
+          "parameters": [
+            {}
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -80,
+        -256
+      ],
+      "id": "03a0b213-bc43-42aa-b9f7-3f6c9cd0d7d5",
+      "name": "Google News Scrapper"
+    },
+    {
+      "parameters": {
+        "jsCode": "return items\n  .filter(item => {\n    const data = item.json;\n    const isReddit = !!data.communityName;\n\n    // Reddit comment'ları tamamen ele\n    if (isReddit && data.dataType === \"comment\") {\n      return false;\n    }\n\n    return true;\n  })\n  .map(item => {\n    const data = item.json;\n    const isReddit = !!data.communityName;\n\n    // IMAGE RESOLUTION (safe)\n    let image = null;\n\n    if (isReddit) {\n      image =\n        data?.preview?.images?.[0]?.source?.url ||\n        (typeof data.thumbnail === \"string\" &&\n        ![\"self\", \"default\", \"nsfw\"].includes(data.thumbnail)\n          ? data.thumbnail\n          : null);\n    } else {\n      image = data?.image || data?.image?.url || null;\n    }\n\n    return {\n      json: {\n        title: data.title,\n        url: data.url,\n        description: isReddit\n          ? (data.body || \"\")\n          : (data.description || \"\"),\n        source: isReddit\n          ? `Reddit (${data.communityName})`\n          : (data.source || \"Google News\"),\n        publishedAt: isReddit ? data.createdAt : data.publishedAt,\n        score: isReddit ? (data.upVotes || 0) : null,\n        image\n      }\n    };\n  });\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -752,
+        128
+      ],
+      "id": "9949f4e0-4785-47b0-a331-5cc52d4bd9ea",
+      "name": "Normalize"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "GlobalConfig1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetData": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Reddit Start URLs": {
+      "main": [
+        [
+          {
+            "node": "Prepare Actor Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Reddit Scraper": {
+      "main": [
+        [
+          {
+            "node": "Wait1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reddit Dataset": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Hash": {
+      "main": [
+        [
+          {
+            "node": "Collect All Hashes",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "SQL JOIN",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Collect All Hashes": {
+      "main": [
+        [
+          {
+            "node": "Fetch Existing Notion Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Existing Notion Items": {
+      "main": [
+        [
+          {
+            "node": "Build Existing Hash Set",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Existing Hash Set": {
+      "main": [
+        [
+          {
+            "node": "SQL JOIN",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "SQL JOIN": {
+      "main": [
+        [
+          {
+            "node": "Build Email HTML",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email HTML": {
+      "main": [
+        [
+          {
+            "node": "Send email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Actor Input": {
+      "main": [
+        [
+          {
+            "node": "Run Reddit Scraper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Google News Input": {
+      "main": [
+        [
+          {
+            "node": "Google News Scrapper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "GetData",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reddit Dataset",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google News Scrapper": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Generate Hash",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GlobalConfig1": {
+      "main": [
+        [
+          {
+            "node": "Prepare Google News Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "88b1d9e7-8aea-4d1b-9aea-7feebe124d21",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9af7fc482aba171425781ec68f05cce996d1dc5a16971466dd3894c0befb6517"
+  },
+  "id": "umz2xC-pSa6vAihI--6Qc",
+  "tags": []
+}
